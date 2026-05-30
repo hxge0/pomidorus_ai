@@ -271,3 +271,63 @@ Zastosowanie Transfer Learningu i architektury EfficientNetB0 pozwoliło na skok
 
 
 * **Ograniczenia (Out-of-scope):** Model został wytrenowany wyłącznie na liściach pomidora (11 kategorii). Nie należy stosować go do diagnozy innych gatunków roślin.
+
+## 6. Wnioski i Podsumowanie Projektu (Conclusions & Key Takeaways)
+
+Na podstawie przeprowadzonych eksperymentów badawczych i procesu trenowania modeli "Pomidoruś AI" sformułowano następujące wnioski:
+
+1. **Przewaga Transfer Learningu nad klasyczną architekturą:**
+
+   Zastosowanie pretrenowanej sieci `EfficientNetB0` z dwufazowym dostrajaniem (Fine-tuning ostatnich 30 warstw) przyniosło skokowy wzrost skuteczności (ogólne Accuracy wzrosło z **83.9%** do aż **97.2%**). Dowodzi to, że w zadaniach klasyfikacji chorób roślin cechy wyekstrahowane na ogólnym zbiorze (ImageNet) stanowią doskonałą bazę do dalszej specjalizacji modelu.
+
+---
+
+2. **Rozwiązanie problemu fałszywych alarmów (Klasa Late_blight):**
+
+   Autorska sieć CNN budowana od zera charakteryzowała się niską precyzją w wykrywaniu zarazy ziemniaczanej pomidora (*Late_blight*), osiągając wskaźnik na poziomie zaledwie **67.2%**. Model ten mylił cechy wizualne tej choroby z innymi kategoriami. Przejście na architekturę `EfficientNetB0` ustabilizowało proces predykcji, podnosząc wskaźniki F1-score dla wszystkich klas powyżej poziomu **94.9%**.
+
+---
+
+3. **Kluczowa rola symulacji warunków polowych (Augmentacja):**
+
+   Zastosowanie pipeline'u transformacji geometrycznych i optycznych (modyfikacja jasności i kontrastu o 20%) pozwoliło modelowi na poprawną pracę ze zdjęciami typu *in-the-wild*. Dzięki temu model nie przeuczył się do idealnych, jednolitych warunków laboratoryjnych z bazy Kaggle, lecz zyskał odporność na zmienne oświetlenie występujące naturalnie na polach uprawnych.
+
+---
+
+4. **Wydajność potoku danych (Data Pipeline):**
+
+   Zaimplementowanie mechanizmu `prefetch` wyeliminowało wąskie gardło (bottleneck) związane z ładowaniem obrazów w czasie rzeczywistym z dysku, co przełożyło się na maksymalne wykorzystanie mocy obliczeniowej procesora graficznego (GPU) i znaczące skrócenie czasu treningu.
+   
+---
+
+5. **Ewolucja poprzez błędy (Lessons Learned):**
+
+   Proces tworzenia projektu uwzględniał iteracyjne podejście (zgodnie z sekcją "faile projektowe"). Pierwsze nieudane próby z własną architekturą pozwoliły lepiej zrozumieć złożoność cech morfologicznych liści pomidora i wymusiły zmianę strategii na podejście z zaawansowanym Transfer Learningiem, co ostatecznie doprowadziło do osiągnięcia stabilności produkcyjnej.
+
+---
+
+6. **Wysoki potencjał wdrożeniowy brzegowego AI (Edge AI):**
+
+   Wytrenowany model wykazuje pełną gotowość do konwersji do formatu `.tflite`. Niski narzut obliczeniowy architektury `EfficientNetB0` w połączeniu z możliwością działania **w 100% Offline** sprawia, że system jest idealnym rozwiązaniem do implementacji w docelowej aplikacji mobilnej dla rolników - gotowej do działania w miejscach o ograniczonym dostępie do sieci komórkowych.
+
+---
+
+7. **Znaczenie prawidłowego podziału zbioru danych (Data Leakage & Evaluation Bias):**
+
+   Wczesne fazy projektu wykazały, jak krytyczna dla wiarygodności modelu jest poprawna implementacja podziału danych (*validation/test split*). Błąd w konfiguracji potoku danych doprowadził do sytuacji, w której zbiór walidacyjny zawierał próbki pochodzące jedynie z 4 klas, podczas gdy ostateczna ewaluacja została przeprowadzona na pozostałych kategoriach. W efekcie macierz pomyłek (*Confusion Matrix*) nie odzwierciedlała pełnego spektrum klas (całkowity brak pierwszych 4 klas). Ewaluacja modelu wyłącznie na części klas drastycznie zniekształca rzeczywisty obraz jego skuteczności. Może prowadzić do sytuacji, w której model wydaje się doskonale radzić sobie z problemem (wysokie ogólne Accuracy na uciętym zbiorze walidacyjnym), podczas gdy w warunkach produkcyjnych kompletnie zawiedzie przy podaniu obrazu z pominiętych kategorii. Prawidłowy podział musi zawsze gwarantować reprezentatywność (np. poprzez walidację stratyfikowaną – *Stratified Split*), aby każda klasa miała proporcjonalny udział w zbiorze uczącym, walidacyjnym i testowym.
+
+<img width="563" height="485" alt="BadValTestSegmentationEffect" src="https://github.com/user-attachments/assets/d8e38a51-6ee8-461d-815d-b7d42fa5a350" />
+
+---
+
+8. **Konieczność stosowania mechanizmów zapisu stanu (Model Checkpointing):**
+
+   Podczas realizacji projektu wystąpiła krytyczna sytuacja techniczna – utrata połączenia ze środowiskiem wykonawczym (chmurą obliczeniową) na ostatniej, 30. epoce treningu. Z powodu braku konfiguracji automatycznego zapisu, cały proces uczenia oraz wypracowane wagi modelu zostały utracone, co wygenerowało niepotrzebne koszty infrastruktury i stratę czasu. W procesie trenowania sieci neuronowych absolutnym standardem powinno być stosowanie tzw. *callbacków* zapisujących stan modelu (np. `ModelCheckpoint` w Keras/TensorFlow). Zapisywanie wag po każdej epoce (lub tylko wtedy, gdy model poprawia swój wynik na zbiorze walidacyjnym) zabezpiecza projekt przed awariami sprzętowymi, przerwami w dostawie prądu czy rozłączeniem sesji w chmurze (np. na Google Colab/Kaggle Notebooks).
+
+<img width="821" height="615" alt="download" src="https://github.com/user-attachments/assets/51946af4-0686-4b2a-9724-a0563647a2df" />
+
+---
+
+9. **Zarządzanie budżetem obliczeniowym a przyrost efektywności (Wczesne zatrzymanie / Early Stopping):**
+
+   Eksperymenty wykazały, że czekanie przez kolejne 15 epok na minimalną poprawę celności (*Accuracy*) na zbiorze walidacyjnym o symboliczną wartość (np. 1%) jest nieuzasadnione ekonomicznie i inżyniersko. Koszty zużycia energii elektrycznej oraz wynajmu mocy obliczeniowej GPU drastycznie przewyższają potencjalne korzyści z tak niewielkiego zysku dokładności. Proces trenowania AI wymaga balansowania między dokładnością a kosztem. Aby zoptymalizować ten proces, należy wdrażać mechanizm `EarlyStopping` z odpowiednio dobranym parametrem `patience` (np. zatrzymanie treningu, jeśli przez 5-7 epok strata walidacyjna nie maleje). Pozwala to na drastyczne skrócenie czasu pracy maszyn, chroni model przed przeuczeniem (*overfitting*) i optymalizuje budżet projektu.
